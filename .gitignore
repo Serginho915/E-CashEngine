@@ -1,0 +1,8 @@
+node_modules/
+.next/
+frontend/.next-build/
+dist/
+env.local
+*.log
+/.env
+backend/data/
