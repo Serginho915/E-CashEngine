@@ -21,8 +21,11 @@ services:
       AI_GENERATION_SECRET: ${AI_GENERATION_SECRET:-}
       AUTO_GENERATE_ARTICLES: ${AUTO_GENERATE_ARTICLES:-false}
       ARTICLES_DATA_DIR: /app/data
+      COVERS_SOURCE_DIR: /app/shared-covers
+      COVERS_SYNC_INTERVAL_MS: ${COVERS_SYNC_INTERVAL_MS:-5000}
     volumes:
       - ./backend:/app
+      - ./frontend/public/covers:/app/shared-covers:ro
       - backend_node_modules:/app/node_modules
       - backend_data:/app/data
   frontend:

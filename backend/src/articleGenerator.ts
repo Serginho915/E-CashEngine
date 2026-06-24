@@ -211,16 +211,146 @@ function normalizeArticle(input: any, index: number, existingSlugs: Set<string>)
   };
 }
 
-function extractJson(content: string) {
-  const cleaned = content.replace(/^```json\s*/i, '').replace(/```$/i, '').trim();
-  const start = cleaned.indexOf('{');
-  const end = cleaned.lastIndexOf('}');
+function extractFirstJsonObject(text: string) {
+  for (let start = 0; start < text.length; start += 1) {
+    if (text[start] !== '{') {
+      continue;
+    }
 
-  if (start === -1 || end === -1) {
+    let depth = 0;
+    let inString = false;
+    let quote = '"';
+    let escaped = false;
+
+    for (let index = start; index < text.length; index += 1) {
+      const char = text[index];
+
+      if (inString) {
+        if (escaped) {
+          escaped = false;
+          continue;
+        }
+
+        if (char === '\\') {
+          escaped = true;
+          continue;
+        }
+
+        if (char === quote) {
+          inString = false;
+        }
+
+        continue;
+      }
+
+      if (char === '"' || char === "'") {
+        inString = true;
+        quote = char;
+        continue;
+      }
+
+      if (char === '{') {
+        depth += 1;
+        continue;
+      }
+
+      if (char === '}') {
+        depth -= 1;
+
+        if (depth === 0) {
+          return text.slice(start, index + 1);
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
+function escapeRawNewlinesInJsonStrings(input: string) {
+  let result = '';
+  let inString = false;
+  let escaped = false;
+
+  for (let index = 0; index < input.length; index += 1) {
+    const char = input[index];
+
+    if (!inString) {
+      if (char === '"') {
+        inString = true;
+      }
+
+      result += char;
+      continue;
+    }
+
+    if (escaped) {
+      result += char;
+      escaped = false;
+      continue;
+    }
+
+    if (char === '\\') {
+      result += char;
+      escaped = true;
+      continue;
+    }
+
+    if (char === '"') {
+      inString = false;
+      result += char;
+      continue;
+    }
+
+    if (char === '\n') {
+      result += '\\n';
+      continue;
+    }
+
+    if (char === '\r') {
+      continue;
+    }
+
+    result += char;
+  }
+
+  return result;
+}
+
+function repairModelJson(input: string) {
+  let repaired = input.trim();
+
+  // Some models return template literals for long HTML fields.
+  repaired = repaired.replace(/"([A-Za-z0-9_]+)"\s*:\s*`([\s\S]*?)`(?=\s*[,}])/g, (_match, key, value) => {
+    return `"${key}":${JSON.stringify(String(value))}`;
+  });
+
+  repaired = repaired.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
+  repaired = repaired.replace(/,\s*([}\]])/g, '$1');
+  repaired = escapeRawNewlinesInJsonStrings(repaired);
+
+  return repaired;
+}
+
+function extractJson(content: string) {
+  const cleaned = content.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+  const candidate = extractFirstJsonObject(cleaned);
+
+  if (!candidate) {
     throw new Error('OpenRouter response did not contain JSON.');
   }
 
-  return JSON.parse(cleaned.slice(start, end + 1));
+  try {
+    return JSON.parse(candidate);
+  } catch (error) {
+    const repaired = repairModelJson(candidate);
+
+    try {
+      return JSON.parse(repaired);
+    } catch (repairError) {
+      throw new Error(`OpenRouter response JSON parse failed: ${(repairError as Error).message}`);
+    }
+  }
 }
 
 async function listReusableImages() {
@@ -234,7 +364,7 @@ async function listReusableImages() {
   }
 }
 
-async function pickReusableCover(article: Article, index: number) {
+async function pickReusableCover(article: Article, index: number, usedImages?: Set<string>) {
   const images = await listReusableImages();
 
   if (images.length === 0) {
@@ -242,7 +372,17 @@ async function pickReusableCover(article: Article, index: number) {
   }
 
   const exactMatch = images.find((image) => image.replace(/\.(png|jpe?g|webp|avif)$/i, '') === article.slug);
-  const selected = exactMatch || images[index % images.length];
+  if (exactMatch) {
+    usedImages?.add(exactMatch);
+    return `/generated/${exactMatch}`;
+  }
+
+  const availableImages =
+    usedImages && usedImages.size < images.length ? images.filter((image) => !usedImages.has(image)) : images;
+
+  const randomIndex = Math.floor(Math.random() * availableImages.length);
+  const selected = availableImages[randomIndex];
+  usedImages?.add(selected);
 
   return `/generated/${selected}`;
 }
@@ -297,54 +437,82 @@ async function generateArticles(count: number, articleNumberStart = 1, initialAv
   const slugs = new Set(existing.map((article) => article.slug));
   const generated: Article[] = [];
   const avoidTopics: string[] = [...initialAvoidTopics];
+  const usedCoverImages = new Set<string>();
+
+  const requestArticleFromModel = async (articleNumber: number, topicsToAvoid: string[]) => {
+    let lastError: Error | null = null;
+    let previousOutput = '';
+
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      const userPrompt =
+        attempt === 1
+          ? buildArticlePrompt(articleNumber, topicsToAvoid)
+          : `Your previous answer was not valid JSON. Return ONLY strict JSON matching the required schema. Do not use markdown code fences. Do not use template literals. Escape line breaks inside strings.\n\nPrevious invalid output:\n${previousOutput.slice(0, 12000)}`;
+
+      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'HTTP-Referer': siteUrl,
+          'X-Title': process.env.SITE_NAME || 'e-CashEngine',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: process.env.OPENROUTER_MODEL || 'meta-llama/llama-3.1-8b-instruct',
+          messages: [
+            {
+              role: 'system',
+              content: 'You write production-ready SEO blog content and return strict JSON only.',
+            },
+            {
+              role: 'user',
+              content: userPrompt,
+            },
+          ],
+          response_format: { type: 'json_object' },
+          temperature: attempt === 1 ? 0.75 : 0.2,
+          max_tokens: Number(process.env.OPENROUTER_MAX_TOKENS || 3500),
+        }),
+      });
+
+      if (!response.ok) {
+        const details = await response.text();
+        lastError = new Error(`OpenRouter request failed: ${response.status} ${details}`);
+        continue;
+      }
+
+      const payload: any = await response.json();
+      const content = payload?.choices?.[0]?.message?.content;
+
+      if (!content) {
+        lastError = new Error('OpenRouter response did not include message content.');
+        continue;
+      }
+
+      previousOutput = String(content);
+
+      try {
+        const parsed = extractJson(content);
+        const rawArticle = parsed.article || (Array.isArray(parsed.articles) ? parsed.articles[0] : null);
+
+        if (!rawArticle) {
+          throw new Error('OpenRouter response did not include an article.');
+        }
+
+        return rawArticle;
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error('OpenRouter response could not be parsed as JSON.');
+      }
+    }
+
+    throw lastError || new Error('OpenRouter generation failed after retries.');
+  };
 
   for (let index = 0; index < count; index += 1) {
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'HTTP-Referer': siteUrl,
-        'X-Title': process.env.SITE_NAME || 'e-CashEngine',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: process.env.OPENROUTER_MODEL || 'openai/gpt-4o',
-        messages: [
-          {
-            role: 'system',
-            content: 'You write production-ready SEO blog content and return strict JSON only.',
-          },
-          {
-            role: 'user',
-            content: buildArticlePrompt(articleNumberStart + index, avoidTopics),
-          },
-        ],
-        temperature: 0.75,
-        max_tokens: Number(process.env.OPENROUTER_MAX_TOKENS || 3500),
-      }),
-    });
-
-    if (!response.ok) {
-      const details = await response.text();
-      throw new Error(`OpenRouter request failed: ${response.status} ${details}`);
-    }
-
-    const payload: any = await response.json();
-    const content = payload?.choices?.[0]?.message?.content;
-
-    if (!content) {
-      throw new Error('OpenRouter response did not include message content.');
-    }
-
-    const parsed = extractJson(content);
-    const rawArticle = parsed.article || (Array.isArray(parsed.articles) ? parsed.articles[0] : null);
-
-    if (!rawArticle) {
-      throw new Error('OpenRouter response did not include an article.');
-    }
+    const rawArticle = await requestArticleFromModel(articleNumberStart + index, avoidTopics);
 
     const normalized = normalizeArticle(rawArticle, index, slugs);
-    normalized.cover = await pickReusableCover(normalized, index);
+    normalized.cover = await pickReusableCover(normalized, index, usedCoverImages);
     generated.push(normalized);
     avoidTopics.push(normalized.title);
   }

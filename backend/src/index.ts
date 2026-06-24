@@ -10,6 +10,7 @@ import {
   readArticles,
   startDailyArticleScheduler,
 } from './articleGenerator';
+import { startCoverSync } from './coverSync';
 import { readSubscribers, subscribeEmail } from './newsletter';
 
 const app = express();
@@ -89,7 +90,7 @@ app.get('/api/admin/generation-status', async (req, res, next) => {
             }
           : null,
         autoGenerateEnabled: process.env.AUTO_GENERATE_ARTICLES === 'true',
-        model: process.env.OPENROUTER_MODEL || 'openai/gpt-4o',
+        model: process.env.OPENROUTER_MODEL || 'meta-llama/llama-3.1-8b-instruct',
         generatedImageCount,
         scheduleTimeZone: 'Europe/Sofia',
         scheduleSlots: ['07:00', '13:00', '20:00'],
@@ -137,6 +138,7 @@ app.use((error: Error, req: express.Request, res: express.Response, _next: expre
 });
 
 startDailyArticleScheduler();
+startCoverSync(getGeneratedImagesDir());
 
 app.listen(4000, () => {
   console.log('API listening on http://localhost:4000');
