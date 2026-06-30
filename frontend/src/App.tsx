@@ -25,11 +25,19 @@ type DraftPost = {
 
 const emptyDraft: DraftPost = { title: '', slug: '', excerpt: '', contentHtml: '<h2>Introduction</h2><p></p>', status: 'published', tags: '' };
 
+function pickCover(seed: string) {
+  let hash = 0;
+  for (let index = 0; index < seed.length; index += 1) {
+    hash = (hash * 31 + seed.charCodeAt(index)) >>> 0;
+  }
+  return covers[hash % covers.length];
+}
+
 function toArticle(post: Post, index = 0): Article {
   const tag = post.tags[0] || (post.source === 'ai' ? 'AI Side Hustles' : 'Online Income');
   return {
     ...post,
-    cover: covers[index % covers.length],
+    cover: pickCover(post.slug || post.title),
     category: tag.replace(/\b\w/g, (letter) => letter.toUpperCase()),
     readingTime: Math.max(5, Math.ceil(post.contentHtml.replace(/<[^>]+>/g, '').split(/\s+/).length / 180)),
     views: 2400 + index * 420,
@@ -46,32 +54,45 @@ function Header() {
   const [open, setOpen] = useState(false);
   const links = [
     { href: '/', label: 'Home' },
-    { href: '/articles', label: 'All articles' },
+    { href: '/articles', label: 'Articles' },
   ];
+
   return (
     <header className="site-header">
-      <button className="logo-button" onClick={() => navigate('/')} aria-label="e-CashEngine home">
-        <img src="/logo.png" alt="e-CashEngine" />
-      </button>
-      <div className="search-pill">
-        <Search size={17} />
-        <span>Affiliate marketing, AI side hustles, freelancing...</span>
-      </div>
-      <nav className="desktop-nav">
-        {links.map((link) => (
-          <button key={link.href} onClick={() => navigate(link.href)}>{link.label}</button>
-        ))}
-      </nav>
-      <button className="icon-button mobile-only" onClick={() => setOpen(!open)} aria-label="Toggle menu">
-        {open ? <X /> : <Menu />}
-      </button>
-      {open && (
-        <div className="mobile-menu">
+      <div className="header-frame">
+        <button className="brand-button" onClick={() => navigate('/')} aria-label="e-CashEngine home">
+          <span className="logo-mark">
+            <img src="/logo.png" alt="" />
+          </span>
+          <span className="brand-copy">
+            <strong>e-CashEngine</strong>
+            <small>Online income intelligence</small>
+          </span>
+        </button>
+
+        <nav className="desktop-nav" aria-label="Primary navigation">
           {links.map((link) => (
-            <button key={link.href} onClick={() => { setOpen(false); navigate(link.href); }}>{link.label}</button>
+            <button key={link.href} onClick={() => navigate(link.href)}>{link.label}</button>
           ))}
+        </nav>
+
+        <div className="header-signal" aria-label="Editorial signal">
+          <span />
+          <strong>2026 Playbooks</strong>
         </div>
-      )}
+
+        <button className="icon-button mobile-only" onClick={() => setOpen(!open)} aria-label="Toggle menu">
+          {open ? <X /> : <Menu />}
+        </button>
+
+        {open && (
+          <div className="mobile-menu">
+            {links.map((link) => (
+              <button key={link.href} onClick={() => { setOpen(false); navigate(link.href); }}>{link.label}</button>
+            ))}
+          </div>
+        )}
+      </div>
     </header>
   );
 }
@@ -120,7 +141,19 @@ function ArticleGrid({ articles }: { articles: Article[] }) {
   return (
     <div className="article-grid">
       {articles.map((article) => (
-        <article className="article-card" key={article.id} onClick={() => navigate(`/articles/${article.slug}`)}>
+        <article
+          className="article-card"
+          key={article.id}
+          role="link"
+          tabIndex={0}
+          onClick={() => navigate(`/articles/${article.slug}`)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              navigate(`/articles/${article.slug}`);
+            }
+          }}
+        >
           <ArticleCover article={article} />
           <div className="article-card-body">
             <span className="category-pill">{article.category}</span>
@@ -189,8 +222,13 @@ function HomePage({ articles }: { articles: Article[] }) {
   );
 }
 
-function ArticlesPage({ articles }: { articles: Article[] }) {
-  const [query, setQuery] = useState('');
+function ArticlesPage({ articles, initialQuery = '' }: { articles: Article[]; initialQuery?: string }) {
+  const [query, setQuery] = useState(initialQuery);
+
+  useEffect(() => {
+    setQuery(initialQuery);
+  }, [initialQuery]);
+
   const filtered = useMemo(() => {
     const q = query.toLowerCase().trim();
     if (!q) return articles;
@@ -475,17 +513,17 @@ function AdminPanel() {
 }
 
 export default function App() {
-  const [path, setPath] = useState(window.location.pathname);
+  const [route, setRoute] = useState(() => `${window.location.pathname}${window.location.search}`);
   const [posts, setPosts] = useState<Post[]>([]);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    const syncPath = () => setPath(window.location.pathname);
-    window.addEventListener('popstate', syncPath);
-    window.addEventListener('app:navigate', syncPath);
+    const syncRoute = () => setRoute(`${window.location.pathname}${window.location.search}`);
+    window.addEventListener('popstate', syncRoute);
+    window.addEventListener('app:navigate', syncRoute);
     return () => {
-      window.removeEventListener('popstate', syncPath);
-      window.removeEventListener('app:navigate', syncPath);
+      window.removeEventListener('popstate', syncRoute);
+      window.removeEventListener('app:navigate', syncRoute);
     };
   }, []);
 
@@ -494,6 +532,9 @@ export default function App() {
   }, []);
 
   const articles = posts.map(toArticle);
+  const [path] = route.split('?');
+  const searchParams = new URLSearchParams(route.includes('?') ? route.slice(route.indexOf('?')) : '');
+  const initialSearch = searchParams.get('search') || '';
   const slug = path.startsWith('/articles/') ? decodeURIComponent(path.replace('/articles/', '')) : '';
   const article = slug ? articles.find((item) => item.slug === slug) : undefined;
 
@@ -506,7 +547,7 @@ export default function App() {
     <>
       <Header />
       {error && <div className="load-error">{error}</div>}
-      {path === '/admin' ? <AdminPanel /> : path === '/articles' ? <ArticlesPage articles={articles} /> : slug ? <ArticlePage article={article} /> : <HomePage articles={articles} />}
+      {path === '/admin' ? <AdminPanel /> : path === '/articles' ? <ArticlesPage articles={articles} initialQuery={initialSearch} /> : slug ? <ArticlePage article={article} /> : <HomePage articles={articles} />}
     </>
   );
 }

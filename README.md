@@ -42,6 +42,14 @@ cp frontend/.env.example frontend/.env
 docker compose up -d --build
 ```
 
+If Docker Desktop/BuildKit hangs on `load local bake definitions` or `listing workers`, use the classic-builder rebuild command:
+
+```bash
+npm run docker:rebuild
+```
+
+This builds `ecashengine-backend-dev` and `ecashengine-frontend-dev` with `DOCKER_BUILDKIT=0`, then starts Compose with `--no-build`.
+
 Services:
 
 - Frontend: `http://localhost:3000`
