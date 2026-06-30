@@ -1,54 +1,90 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ecashengine
+      POSTGRES_USER: ecashengine
+      POSTGRES_PASSWORD: ecashengine
+    volumes:
+      - ecashengine_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ecashengine -d ecashengine"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
   backend:
+    image: ecashengine-backend-dev
     build:
       context: ./backend
       target: dev
-    container_name: ecashengine-backend-dev
     ports:
       - "4000:4000"
+    env_file:
+      - path: backend/.env
+        required: false
     environment:
-      NODE_ENV: development
+      DATABASE_URL: postgres://ecashengine:ecashengine@postgres:5432/ecashengine
+      REDIS_URL: redis://redis:6379
+      CORS_ORIGIN: http://localhost:3000
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       OPENROUTER_MODEL: ${OPENROUTER_MODEL:-meta-llama/llama-3.1-8b-instruct}
-      OPENROUTER_MAX_TOKENS: ${OPENROUTER_MAX_TOKENS:-3000}
-      SITE_URL: ${SITE_URL:-http://localhost:3000}
-      SITE_NAME: ${SITE_NAME:-e-CashEngine}
-      SMTP_HOST: ${SMTP_HOST:-}
-      SMTP_PORT: ${SMTP_PORT:-587}
-      SMTP_USER: ${SMTP_USER:-}
-      SMTP_PASS: ${SMTP_PASS:-}
-      SMTP_FROM: ${SMTP_FROM:-}
-      AI_GENERATION_SECRET: ${AI_GENERATION_SECRET:-}
-      AUTO_GENERATE_ARTICLES: ${AUTO_GENERATE_ARTICLES:-false}
-      ARTICLES_DATA_DIR: /app/data
-      COVERS_SOURCE_DIR: /app/shared-covers
-      COVERS_SYNC_INTERVAL_MS: ${COVERS_SYNC_INTERVAL_MS:-5000}
-    volumes:
-      - ./backend:/app
-      - ./frontend/public/covers:/app/shared-covers:ro
-      - backend_node_modules:/app/node_modules
-      - backend_data:/app/data
+      OPENROUTER_SITE_URL: ${OPENROUTER_SITE_URL:-http://localhost:3000}
+      OPENROUTER_TIMEOUT_MS: ${OPENROUTER_TIMEOUT_MS:-90000}
+      OPENROUTER_MAX_INPUT_CHARS: ${OPENROUTER_MAX_INPUT_CHARS:-16000}
+      OPENROUTER_MAX_OUTPUT_TOKENS: ${OPENROUTER_MAX_OUTPUT_TOKENS:-9000}
+      OPENROUTER_TEMPERATURE: ${OPENROUTER_TEMPERATURE:-0.7}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:4000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
   frontend:
+    image: ecashengine-frontend-dev
     build:
       context: ./frontend
       target: dev
-    container_name: ecashengine-frontend-dev
     ports:
       - "3000:3000"
-    volumes:
-      - ./frontend:/app
-      - frontend_node_modules:/app/node_modules
-      - frontend_next:/app/.next
+    env_file:
+      - path: frontend/.env
+        required: false
     environment:
-      NODE_ENV: development
-      API_URL: ${API_URL:-http://backend:4000}
-      NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-http://localhost:3000}
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
+      VITE_API_URL: http://localhost:4000
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+
+  admin-seed:
+    image: ecashengine-backend-dev
+    env_file:
+      - path: backend/.env
+        required: false
+    environment:
+      DATABASE_URL: postgres://ecashengine:ecashengine@postgres:5432/ecashengine
+      LOCAL_SUPERADMIN_EMAIL: ${LOCAL_SUPERADMIN_EMAIL:-admin@ecashengine.local}
+      LOCAL_SUPERADMIN_PASSWORD: ${LOCAL_SUPERADMIN_PASSWORD:-MySecretPassword123!}
+    command: npm run create-superadmin
+    depends_on:
+      postgres:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    restart: "no"
 
 volumes:
-  backend_node_modules:
-  backend_data:
-  frontend_node_modules:
-  frontend_next:
+  ecashengine_postgres_data:

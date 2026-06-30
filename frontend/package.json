@@ -2,32 +2,29 @@
   "name": "ecashengine-frontend",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
-    "dev": "next dev -p 3000",
-    "build": "NEXT_DIST_DIR=.next-build next build",
-    "start": "NEXT_DIST_DIR=.next-build next start -p 3000",
-    "lint": "next lint"
+    "dev": "vite --host 0.0.0.0 --port 3000",
+    "build": "tsc --noEmit && vite build",
+    "start": "serve -s dist -l 3000",
+    "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "next": "15.0.0",
+    "lucide-react": "^0.470.0",
     "react": "18.2.0",
     "react-dom": "18.2.0",
-    "framer-motion": "^11.18.2",
-    "lucide-react": "^0.470.0",
-    "tailwindcss": "^4.3.1",
-    "@radix-ui/react-tooltip": "^1.0.0",
-    "@tailwindcss/typography": "^0.5.20",
-    "autoprefixer": "^10.5.0",
-    "postcss": "^8.5.15",
-    "sass": "^1.66.0"
+    "sass": "^1.66.0",
+    "serve": "^14.2.4"
   },
   "devDependencies": {
-    "typescript": "^5.5.4",
+    "@types/node": "^20.14.6",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
-    "@types/node": "^20.14.6",
-    "eslint": "^8.57.0",
-    "eslint-config-next": "15.0.0",
-    "@tailwindcss/postcss": "^4.3.1"
+    "@vitejs/plugin-react": "^6.0.3",
+    "typescript": "^5.5.4",
+    "vite": "^8.1.0"
+  },
+  "overrides": {
+    "postcss": "^8.5.10"
   }
 }

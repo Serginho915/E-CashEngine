@@ -1,5 +1,7 @@
 node_modules
 dist
-npm-debug.log
-.DS_Store
 .env
+.env.*
+npm-debug.log
+*.tsbuildinfo
+data

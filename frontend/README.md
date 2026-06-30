@@ -1,10 +1,12 @@
-# Frontend (e-CashEngine)
+# E-CashEngine Frontend
 
-Next.js 15 + TypeScript frontend for e-CashEngine, an online income guide blog.
+Small Vite + React + TypeScript + SCSS frontend for e-CashEngine.
 
-Run:
+Routes are handled inside `src/App.tsx`:
 
-```bash
-npm install
-npm run dev
-```
+- `/`
+- `/articles`
+- `/articles/:slug`
+- `/admin`
+
+The app uses `VITE_API_URL` to call the Express backend.
