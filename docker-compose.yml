@@ -1,4 +1,12 @@
 services:
+  env-setup:
+    image: node:20-alpine
+    working_dir: /app
+    volumes:
+      - ./:/app
+    command: node scripts/setup-dev-env.mjs
+    restart: "no"
+
   postgres:
     image: postgres:16-alpine
     environment:
@@ -35,14 +43,9 @@ services:
       DATABASE_URL: postgres://ecashengine:ecashengine@postgres:5432/ecashengine
       REDIS_URL: redis://redis:6379
       CORS_ORIGIN: http://localhost:3000
-      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
-      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-meta-llama/llama-3.1-8b-instruct}
-      OPENROUTER_SITE_URL: ${OPENROUTER_SITE_URL:-http://localhost:3000}
-      OPENROUTER_TIMEOUT_MS: ${OPENROUTER_TIMEOUT_MS:-90000}
-      OPENROUTER_MAX_INPUT_CHARS: ${OPENROUTER_MAX_INPUT_CHARS:-16000}
-      OPENROUTER_MAX_OUTPUT_TOKENS: ${OPENROUTER_MAX_OUTPUT_TOKENS:-9000}
-      OPENROUTER_TEMPERATURE: ${OPENROUTER_TEMPERATURE:-0.7}
     depends_on:
+      env-setup:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
@@ -66,6 +69,8 @@ services:
     environment:
       VITE_API_URL: http://localhost:4000
     depends_on:
+      env-setup:
+        condition: service_completed_successfully
       backend:
         condition: service_healthy
 
@@ -80,6 +85,8 @@ services:
       LOCAL_SUPERADMIN_PASSWORD: ${LOCAL_SUPERADMIN_PASSWORD:-MySecretPassword123!}
     command: npm run create-superadmin
     depends_on:
+      env-setup:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       backend:
