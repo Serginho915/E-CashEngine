@@ -469,12 +469,12 @@ input, textarea, select {
 .share-bar {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
   flex-wrap: wrap;
-  margin: 22px 0;
+  margin: 24px 0;
 }
 
-.share-bar span {
+.share-label {
   font-size: 12px;
   font-weight: 900;
   letter-spacing: 0.08em;
@@ -482,11 +482,19 @@ input, textarea, select {
   opacity: 0.72;
 }
 
-.share-bar a {
-  min-height: 36px;
+.share-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.share-link {
+  min-height: 42px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 8px;
   padding: 0 12px;
   border: 1px solid currentColor;
   border-radius: 6px;
@@ -495,6 +503,13 @@ input, textarea, select {
   font-weight: 800;
 }
 
-.share-bar a:hover {
+.share-link svg {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  fill: currentColor;
+}
+
+.share-link:hover {
   transform: translateY(-1px);
 }
