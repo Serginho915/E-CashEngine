@@ -50,6 +50,27 @@ function navigate(path: string) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+function ShareBar({ title }: { title: string }) {
+  const url = typeof window !== "undefined" ? window.location.href : "";
+  const encodedUrl = encodeURIComponent(url);
+  const encodedTitle = encodeURIComponent(title);
+  const targets = [
+    { label: "X", href: `https://twitter.com/intent/tweet?url=${encodedUrl}&text=${encodedTitle}` },
+    { label: "Threads", href: `https://www.threads.net/intent/post?text=${encodedTitle}%20${encodedUrl}` },
+    { label: "Telegram", href: `https://t.me/share/url?url=${encodedUrl}&text=${encodedTitle}` },
+    { label: "LinkedIn", href: `https://www.linkedin.com/sharing/share-offsite/?url=${encodedUrl}` },
+  ];
+
+  return (
+    <aside className="share-bar" aria-label="Share this post">
+      <span>Share</span>
+      {targets.map((target) => (
+        <a key={target.label} href={target.href} target="_blank" rel="noreferrer">{target.label}</a>
+      ))}
+    </aside>
+  );
+}
+
 function Header() {
   const [open, setOpen] = useState(false);
   const links = [
@@ -265,6 +286,7 @@ function ArticlePage({ article }: { article?: Article }) {
       <h1>{article.title}</h1>
       <p className="article-lead">{article.excerpt}</p>
       <ArticleCover article={article} />
+      <ShareBar title={article.title} />
       <div className="article-content" dangerouslySetInnerHTML={{ __html: article.contentHtml }} />
       <button className="secondary-action" onClick={() => navigate('/articles')}>Back to all articles</button>
     </main>
