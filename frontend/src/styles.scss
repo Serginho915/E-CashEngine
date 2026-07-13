@@ -407,32 +407,47 @@ input, textarea, select {
 }
 .media-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+  align-items: stretch;
 }
 .media-card {
+  min-width: 0;
   display: grid;
-  gap: 8px;
+  grid-template-rows: auto minmax(48px, auto) 44px 28px;
+  gap: 9px;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--card);
-  padding: 8px;
+  padding: 10px;
+  overflow: hidden;
 }
 .media-card img {
+  display: block;
   width: 100%;
   aspect-ratio: 16 / 9;
+  max-height: 138px;
   border-radius: 8px;
   object-fit: cover;
   background: #fff;
 }
+.media-card div {
+  min-width: 0;
+}
 .media-card strong,
 .media-card small {
   display: block;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .media-card small { color: var(--muted); }
+.media-card button,
+.media-card span {
+  width: 100%;
+  min-width: 0;
+}
 .admin-list article {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
