@@ -30,9 +30,11 @@ services:
       target: prod
     restart: unless-stopped
     ports:
-      - "4000:4000"
+      - "4105:4000"
+    volumes:
+      - ecashengine_prod_uploads:/app/uploads
     env_file:
-      - path: backend/.env.production
+      - path: ./backend/.env.production
         required: false
     environment:
       NODE_ENV: production
@@ -43,6 +45,11 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:4000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
 
   frontend:
     image: ecashengine-frontend-prod
@@ -51,14 +58,33 @@ services:
       target: prod
       args:
         VITE_API_URL: ${VITE_API_URL}
+        VITE_GA_MEASUREMENT_ID: ${VITE_GA_MEASUREMENT_ID}
     restart: unless-stopped
-    ports:
-      - "8080:3000"
     environment:
       NODE_ENV: production
       VITE_API_URL: ${VITE_API_URL}
+      VITE_GA_MEASUREMENT_ID: ${VITE_GA_MEASUREMENT_ID}
+    ports:
+      - "8100:3000"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+
+  admin-seed:
+    image: ecashengine-backend-prod
+    env_file:
+      - path: ./backend/.env.production
+        required: false
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      LOCAL_SUPERADMIN_EMAIL: ${LOCAL_SUPERADMIN_EMAIL}
+      SUPERADMIN_PASSWORD: ${LOCAL_SUPERADMIN_PASSWORD}
+    command: ["sh", "-c", "npm run create-superadmin -- \"$LOCAL_SUPERADMIN_EMAIL\""]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
 
 volumes:
   ecashengine_prod_postgres_data:
+  ecashengine_prod_uploads:

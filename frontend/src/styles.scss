@@ -372,6 +372,67 @@ input, textarea, select {
 .admin-toolbar h1 { margin-right: auto; }
 .admin-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(340px, .8fr); gap: 20px; align-items: start; }
 .editor-panel, .admin-list, .settings-panel { padding: 20px; display: grid; gap: 14px; }
+.media-panel {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .56);
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+}
+.media-panel-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+.media-panel-head h3 { margin: 0; }
+.upload-button {
+  position: relative;
+  overflow: hidden;
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  border-radius: 8px;
+  background: var(--teal);
+  color: #fff;
+  padding: 0 12px;
+  font-weight: 850;
+}
+.upload-button input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.media-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+}
+.media-card {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+  padding: 8px;
+}
+.media-card img {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 8px;
+  object-fit: cover;
+  background: #fff;
+}
+.media-card strong,
+.media-card small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.media-card small { color: var(--muted); }
 .admin-list article {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
@@ -386,6 +447,11 @@ input, textarea, select {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
+}
+.time-select-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(76px, 1fr));
+  gap: 8px;
 }
 .field-title {
   display: block;

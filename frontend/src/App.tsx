@@ -1,9 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
+import { type ChangeEvent, useEffect, useMemo, useState } from 'react';
 import { ArrowRight, BookOpen, Clock, Eye, FilePlus, Menu, RefreshCw, Save, Search, Trash2, Wand2, X } from 'lucide-react';
-import { getPost, getPosts, request, subscribe } from './api';
+import { assetUrl, getPost, getPosts, request, subscribe } from './api';
+import { trackPageView } from './analytics';
 import type { AdminSettings, Article, Post } from './domain';
 
 const covers = ['/covers/cover1.png', '/covers/cover2.png', '/covers/cover3.png', '/covers/cover4.png'];
+const hourOptions = Array.from({ length: 24 }, (_, hour) => String(hour).padStart(2, '0'));
+const minuteOptions = Array.from({ length: 60 }, (_, minute) => String(minute).padStart(2, '0'));
 const weekdays = [
   { value: 1, label: 'Mon' },
   { value: 2, label: 'Tue' },
@@ -21,9 +24,18 @@ type DraftPost = {
   contentHtml: string;
   status: 'draft' | 'published';
   tags: string;
+  coverImage: string;
 };
 
-const emptyDraft: DraftPost = { title: '', slug: '', excerpt: '', contentHtml: '<h2>Introduction</h2><p></p>', status: 'published', tags: '' };
+type MediaAsset = {
+  name: string;
+  url: string;
+  size: number;
+  createdAt: string;
+  builtIn?: boolean;
+};
+
+const emptyDraft: DraftPost = { title: '', slug: '', excerpt: '', contentHtml: '<h2>Introduction</h2><p></p>', status: 'published', tags: '', coverImage: '' };
 
 function pickCover(seed: string) {
   let hash = 0;
@@ -33,11 +45,20 @@ function pickCover(seed: string) {
   return covers[hash % covers.length];
 }
 
+function readFileAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(reader.error || new Error('Could not read image.'));
+    reader.readAsDataURL(file);
+  });
+}
+
 function toArticle(post: Post, index = 0): Article {
   const tag = post.tags[0] || (post.source === 'ai' ? 'AI Side Hustles' : 'Online Income');
   return {
     ...post,
-    cover: pickCover(post.slug || post.title),
+    cover: post.coverImage ? assetUrl(post.coverImage) : pickCover(post.slug || post.title),
     category: tag.replace(/\b\w/g, (letter) => letter.toUpperCase()),
     readingTime: Math.max(5, Math.ceil(post.contentHtml.replace(/<[^>]+>/g, '').split(/\s+/).length / 180)),
     views: 2400 + index * 420,
@@ -336,6 +357,7 @@ function AdminPanel() {
   const [token, setToken] = useState('');
   const [csrfToken, setCsrfToken] = useState('');
   const [posts, setPosts] = useState<Post[]>([]);
+  const [coverImages, setCoverImages] = useState<MediaAsset[]>([]);
   const [settings, setSettings] = useState<AdminSettings | null>(null);
   const [draft, setDraft] = useState(emptyDraft);
   const [editingSlug, setEditingSlug] = useState('');
@@ -344,12 +366,14 @@ function AdminPanel() {
   const [generatingCount, setGeneratingCount] = useState<1 | 3 | null>(null);
 
   async function load(nextToken = token) {
-    const [loadedPosts, loadedSettings] = await Promise.all([
+    const [loadedPosts, loadedSettings, loadedMedia] = await Promise.all([
       request<Post[]>('/api/admin/posts', {}, nextToken),
       request<AdminSettings>('/api/admin/settings', {}, nextToken),
+      request<MediaAsset[]>('/api/admin/media/covers', {}, nextToken),
     ]);
     setPosts(loadedPosts);
     setSettings(loadedSettings);
+    setCoverImages(loadedMedia);
   }
 
   async function signIn(event: React.FormEvent) {
@@ -378,6 +402,7 @@ function AdminPanel() {
       const body = {
         ...draft,
         tags: draft.tags.split(',').map((tag) => tag.trim()).filter(Boolean),
+        coverImage: draft.coverImage || undefined,
       };
       await request<Post>(editingSlug ? `/api/admin/posts/${editingSlug}` : '/api/admin/posts', {
         method: editingSlug ? 'PUT' : 'POST',
@@ -468,6 +493,49 @@ function AdminPanel() {
     });
   }
 
+  function updateGenerationTimePart(index: number, part: 'hour' | 'minute', value: string) {
+    if (!settings) return;
+    const currentTime = (settings.generationTimes?.length ? settings.generationTimes : [settings.generationTime || '08:00'])[index] || '08:00';
+    const [currentHour = '08', currentMinute = '00'] = currentTime.split(':');
+    updateGenerationTime(index, part === 'hour' ? `${value}:${currentMinute}` : `${currentHour}:${value}`);
+  }
+
+  async function uploadCoverImage(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    setBusy(true);
+    try {
+      const asset = await request<MediaAsset>('/api/admin/media/covers', {
+        method: 'POST',
+        body: JSON.stringify({ fileName: file.name, dataUrl: await readFileAsDataUrl(file) }),
+      }, token);
+      setCoverImages((current) => [asset, ...current]);
+      setDraft((current) => ({ ...current, coverImage: asset.url }));
+      setMessage('Cover image uploaded.');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Upload failed.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteCoverImage(asset: MediaAsset) {
+    if (asset.builtIn) return;
+    setBusy(true);
+    try {
+      await request(`/api/admin/media/covers/${encodeURIComponent(asset.name)}`, { method: 'DELETE' }, token);
+      setCoverImages((current) => current.filter((item) => item.name !== asset.name));
+      if (draft.coverImage === asset.url) setDraft((current) => ({ ...current, coverImage: '' }));
+      setMessage('Cover image deleted.');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Delete failed.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function toggleWeekday(day: number) {
     if (!settings) return;
     const current = settings.generationWeekdays || [];
@@ -506,6 +574,29 @@ function AdminPanel() {
           <label><span>Excerpt</span><textarea value={draft.excerpt} onChange={(event) => setDraft({ ...draft, excerpt: event.target.value })} required /></label>
           <label><span>HTML content</span><textarea rows={10} value={draft.contentHtml} onChange={(event) => setDraft({ ...draft, contentHtml: event.target.value })} required /></label>
           <label><span>Tags</span><input value={draft.tags} onChange={(event) => setDraft({ ...draft, tags: event.target.value })} placeholder="affiliate marketing, AI side hustles" /></label>
+          <label><span>Cover image URL</span><input value={draft.coverImage} onChange={(event) => setDraft({ ...draft, coverImage: event.target.value })} placeholder="/covers/cover1.png or /uploads/covers/..." /></label>
+          <section className="media-panel">
+            <div className="media-panel-head">
+              <h3>Cover images</h3>
+              <label className="upload-button">
+                Upload image
+                <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={uploadCoverImage} disabled={busy} />
+              </label>
+            </div>
+            <div className="media-grid">
+              {coverImages.map((asset) => (
+                <article key={asset.name} className="media-card">
+                  <img src={assetUrl(asset.url)} alt="" />
+                  <div>
+                    <strong>{asset.name}</strong>
+                    <small>{asset.builtIn ? 'Included' : `${Math.round(asset.size / 1024)} KB`}</small>
+                  </div>
+                  <button type="button" onClick={() => setDraft({ ...draft, coverImage: asset.url })}>Use</button>
+                  {asset.builtIn ? <span>Built-in</span> : <button type="button" onClick={() => deleteCoverImage(asset)} disabled={busy}>Delete</button>}
+                </article>
+              ))}
+            </div>
+          </section>
           <button disabled={busy}><Save size={16} /> Save article</button>
         </form>
         <section className="admin-list">
@@ -515,7 +606,7 @@ function AdminPanel() {
               <div><strong>{post.title}</strong><small>{post.slug}</small></div>
               <button onClick={() => {
                 setEditingSlug(post.slug);
-                setDraft({ title: post.title, slug: post.slug, excerpt: post.excerpt, contentHtml: post.contentHtml, status: post.status, tags: post.tags.join(', ') });
+                setDraft({ title: post.title, slug: post.slug, excerpt: post.excerpt, contentHtml: post.contentHtml, status: post.status, tags: post.tags.join(', '), coverImage: post.coverImage || '' });
               }}><FilePlus size={16} /> Edit</button>
               <button onClick={() => removePost(post.slug)}><Trash2 size={16} /> Delete</button>
             </article>
@@ -545,7 +636,14 @@ function AdminPanel() {
               {(settings.generationTimes?.length ? settings.generationTimes : [settings.generationTime || '08:00']).slice(0, settings.generationCount || 1).map((time, index) => (
                 <label key={`${index}-${time}`}>
                   <span>Run {index + 1}</span>
-                  <input type="time" value={time} onChange={(event) => updateGenerationTime(index, event.target.value)} />
+                  <div className="time-select-row">
+                    <select value={(time.split(':')[0] || '08').padStart(2, '0')} onChange={(event) => updateGenerationTimePart(index, 'hour', event.target.value)}>
+                      {hourOptions.map((hour) => <option key={hour} value={hour}>{hour}</option>)}
+                    </select>
+                    <select value={(time.split(':')[1] || '00').padStart(2, '0')} onChange={(event) => updateGenerationTimePart(index, 'minute', event.target.value)}>
+                      {minuteOptions.map((minute) => <option key={minute} value={minute}>{minute}</option>)}
+                    </select>
+                  </div>
                 </label>
               ))}
             </div>
@@ -589,6 +687,10 @@ export default function App() {
   useEffect(() => {
     getPosts().then(setPosts).catch((err) => setError(err instanceof Error ? err.message : 'Could not load articles.'));
   }, []);
+
+  useEffect(() => {
+    trackPageView(window.location.pathname);
+  }, [route]);
 
   const articles = posts.map(toArticle);
   const [path] = route.split('?');

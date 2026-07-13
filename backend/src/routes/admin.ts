@@ -3,6 +3,7 @@ import { asyncHandler } from '../middleware/asyncHandler';
 import { adminAuth } from '../middleware/adminAuth';
 import { auditLog } from '../services/auditLog';
 import { getAdminSettings, updateAdminSettings } from '../services/adminSettings';
+import { deleteCoverImage, listCoverImages, saveCoverImage } from '../services/mediaStore';
 import { deletePost, getPost, listPosts, upsertPost } from '../services/postStore';
 import { HttpError } from '../middleware/errorHandler';
 
@@ -41,6 +42,31 @@ adminRouter.delete(
   asyncHandler(async (req, res) => {
     await deletePost(req.params.slug);
     await auditLog('post_delete', req.user, { slug: req.params.slug });
+    res.json({ data: { ok: true } });
+  }),
+);
+
+adminRouter.get(
+  '/media/covers',
+  asyncHandler(async (_req, res) => {
+    res.json({ data: await listCoverImages() });
+  }),
+);
+
+adminRouter.post(
+  '/media/covers',
+  asyncHandler(async (req, res) => {
+    const asset = await saveCoverImage(req.body);
+    await auditLog('media_create', req.user, { name: asset.name });
+    res.status(201).json({ data: asset });
+  }),
+);
+
+adminRouter.delete(
+  '/media/covers/:name',
+  asyncHandler(async (req, res) => {
+    await deleteCoverImage(req.params.name);
+    await auditLog('media_delete', req.user, { name: req.params.name });
     res.json({ data: { ok: true } });
   }),
 );

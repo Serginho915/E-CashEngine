@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
+import path from 'node:path';
 import { ensureSchema } from './services/db';
 import { migrateLegacyDataIfNeeded } from './services/legacyDataMigration';
 import { errorHandler } from './middleware/errorHandler';
@@ -16,6 +17,11 @@ import { startGenerationScheduler } from './services/generationScheduler';
 const app = express();
 const port = Number(process.env.PORT || 4000);
 const corsOrigin = process.env.CORS_ORIGIN || 'http://localhost:3000';
+const uploadRoot = process.env.UPLOAD_DIR || path.resolve(process.cwd(), 'uploads');
+
+if (process.env.TRUST_PROXY === 'true' || process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1);
+}
 
 app.use(helmet());
 app.use(
@@ -24,8 +30,9 @@ app.use(
     credentials: true,
   }),
 );
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json({ limit: '8mb' }));
 app.use(cookieParser());
+app.use('/uploads', express.static(uploadRoot, { fallthrough: false }));
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', service: 'ecashengine-backend', time: new Date().toISOString() });

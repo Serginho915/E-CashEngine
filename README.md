@@ -30,7 +30,9 @@ Runtime data lives in PostgreSQL, not JSON files or container filesystems.
 - Refresh token hashes stored in PostgreSQL
 - CSRF check on refresh
 - CRUD for generated/admin posts
+- Upload, select, and reuse article cover images
 - Admin generation settings and Generate now button
+- Multiple scheduled generation times per day
 - OpenRouter generation with sanitized HTML before storage
 - Audit events for login, settings, post changes, and generation
 
@@ -97,7 +99,7 @@ Edit:
 
 - root `.env.production` for PostgreSQL and public frontend URLs
 - `backend/.env.production` for backend secrets, CORS, OpenRouter, SMTP
-- root `.env.production` uses `VITE_API_URL` for the browser API endpoint.
+- root `.env.production` uses `VITE_API_URL` for the browser API endpoint and `VITE_GA_MEASUREMENT_ID` for Google Analytics.
 
 Production refuses to start if required secrets are missing, equal, too short, or production URLs point to localhost.
 
@@ -109,9 +111,10 @@ docker compose --env-file .env.production -f docker-compose.prod.yml up --build 
 
 Production ports:
 
-- Frontend: host `8080` -> container `3000`
-- Backend: host `4000` -> container `4000`
+- Frontend: host `8100` -> container `3000`
+- Backend: host `4105` -> container `4000`
 - PostgreSQL and Redis are not published to the host.
+- Uploaded covers are stored in the `ecashengine_prod_uploads` Docker volume.
 
 ## Local Development Without Docker
 
@@ -147,6 +150,9 @@ npm run dev
 - `DELETE /api/admin/posts/:slug`
 - `GET /api/admin/settings`
 - `PUT /api/admin/settings`
+- `GET /api/admin/media/covers`
+- `POST /api/admin/media/covers`
+- `DELETE /api/admin/media/covers/:name`
 - `POST /api/ai/generate-article`
 
 ## Backups
@@ -164,4 +170,6 @@ curl http://localhost:4000/api/health
 curl -I http://localhost:3000/
 curl http://localhost:4000/api/posts
 docker compose --env-file .env.production -f docker-compose.prod.yml config
+curl http://localhost:4105/api/health
+curl -I http://localhost:8100/
 ```

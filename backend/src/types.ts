@@ -16,16 +16,18 @@ export interface PostInput {
   status?: 'draft' | 'published';
   author?: string;
   tags?: string[];
+  coverImage?: string;
   seoTitle?: string;
   seoDescription?: string;
 }
 
-export interface Post extends Required<Omit<PostInput, 'slug' | 'status' | 'author' | 'tags' | 'seoTitle' | 'seoDescription'>> {
+export interface Post extends Required<Omit<PostInput, 'slug' | 'status' | 'author' | 'tags' | 'coverImage' | 'seoTitle' | 'seoDescription'>> {
   id: string;
   slug: string;
   status: 'draft' | 'published';
   author: string;
   tags: string[];
+  coverImage: string | null;
   seoTitle: string | null;
   seoDescription: string | null;
   source: 'admin' | 'ai' | 'legacy';

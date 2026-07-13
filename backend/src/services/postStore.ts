@@ -13,6 +13,7 @@ function mapPost(row: any): Post {
     status: row.status,
     author: row.author,
     tags: row.tags || [],
+    coverImage: row.cover_image,
     seoTitle: row.seo_title,
     seoDescription: row.seo_description,
     source: row.source,
@@ -61,13 +62,14 @@ export async function upsertPost(input: PostInput, source: Post['source'] = 'adm
     input.status || 'published',
     input.author || 'Editorial team',
     input.tags || [],
+    input.coverImage || null,
     input.seoTitle || null,
     input.seoDescription || null,
     source,
   ];
   const result = await query(
-    `INSERT INTO generated_posts (slug, title, excerpt, content_html, status, author, tags, seo_title, seo_description, source)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+    `INSERT INTO generated_posts (slug, title, excerpt, content_html, status, author, tags, cover_image, seo_title, seo_description, source)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
      ON CONFLICT (slug) DO UPDATE SET
        title = excluded.title,
        excerpt = excluded.excerpt,
@@ -75,6 +77,7 @@ export async function upsertPost(input: PostInput, source: Post['source'] = 'adm
        status = excluded.status,
        author = excluded.author,
        tags = excluded.tags,
+       cover_image = excluded.cover_image,
        seo_title = excluded.seo_title,
        seo_description = excluded.seo_description,
        source = excluded.source,

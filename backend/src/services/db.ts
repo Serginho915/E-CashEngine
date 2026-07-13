@@ -62,6 +62,7 @@ export async function ensureSchema() {
       status text NOT NULL DEFAULT 'published',
       author text NOT NULL DEFAULT 'Editorial team',
       tags text[] NOT NULL DEFAULT '{}',
+      cover_image text,
       seo_title text,
       seo_description text,
       source text NOT NULL DEFAULT 'admin',
@@ -89,6 +90,11 @@ export async function ensureSchema() {
       email text UNIQUE NOT NULL,
       created_at timestamptz NOT NULL DEFAULT now()
     );
+  `);
+
+  await query(`
+    ALTER TABLE generated_posts
+    ADD COLUMN IF NOT EXISTS cover_image text
   `);
 
   const count = await query<{ count: string }>('SELECT count(*) FROM generated_posts');

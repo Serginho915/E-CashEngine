@@ -1,5 +1,6 @@
 import { auditLog } from './auditLog';
 import { getAdminSettings } from './adminSettings';
+import { pickRandomCoverImage } from './mediaStore';
 import { generateArticlesWithOpenRouter } from './openrouter';
 import { makeSlug, upsertPost } from './postStore';
 
@@ -13,6 +14,9 @@ export async function generateAndStoreArticles(actor?: { id?: string; email?: st
   return Promise.all(
     inputs.map((input, index) => {
       input.slug = `${makeSlug(input.slug || input.title)}-${now}-${index + 1}`;
+      if (!input.coverImage) {
+        return pickRandomCoverImage().then((coverImage) => upsertPost({ ...input, coverImage: coverImage || undefined }, 'ai'));
+      }
       return upsertPost(input, 'ai');
     }),
   );

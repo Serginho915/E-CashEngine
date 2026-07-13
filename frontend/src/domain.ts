@@ -7,6 +7,7 @@ export type Post = {
   status: 'draft' | 'published';
   author: string;
   tags: string[];
+  coverImage: string | null;
   seoTitle: string | null;
   seoDescription: string | null;
   source: 'admin' | 'ai' | 'legacy';
