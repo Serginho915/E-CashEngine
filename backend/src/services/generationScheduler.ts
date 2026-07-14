@@ -32,9 +32,10 @@ function getScheduleClock(now = new Date()) {
 
 export async function generateAndStoreArticles(actor?: { id?: string; email?: string }, count = 3) {
   await auditLog('generation_trigger', actor || null);
+  console.log(`Generation started: count=${count}`);
   const inputs = await generateArticlesWithOpenRouter(count);
   const now = Date.now();
-  return Promise.all(
+  const posts = await Promise.all(
     inputs.map((input, index) => {
       input.slug = `${makeSlug(input.slug || input.title)}-${now}-${index + 1}`;
       if (!input.coverImage) {
@@ -43,10 +44,13 @@ export async function generateAndStoreArticles(actor?: { id?: string; email?: st
       return upsertPost(input, 'ai');
     }),
   );
+  console.log(`Generation saved: count=${posts.length}`);
+  return posts;
 }
 
 export function startGenerationScheduler() {
   if (timer) clearInterval(timer);
+  console.log(`Generation scheduler started: timezone=${generationTimezone}`);
   const tick = async () => {
     try {
       const settings = await getAdminSettings();
@@ -57,6 +61,7 @@ export function startGenerationScheduler() {
       const key = `${date}-${hhmm}`;
       if (shouldRunToday && times.includes(hhmm) && key !== lastRunKey) {
         lastRunKey = key;
+        console.log(`Generation scheduler matched: key=${key}, times=${times.join(',')}`);
         await generateAndStoreArticles();
       }
     } catch (error) {
